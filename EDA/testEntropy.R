@@ -11,50 +11,18 @@ library(spdep)
 library(INLA)
 inla.setOption(pardiso.license = "~/pardiso.lic")
 
-counties <- c(MI="079")
-#counties <- c(LA="037", OC="059")
+msaCountyDF <- read_csv(
+    "https://data.nber.org/cbsa-csa-fips-county-crosswalk/cbsa2fipsxw.csv") %>%
+    filter(!is.na(fipscountycode) & !is.na(cbsacode)) %>%
+    rename(countyname = countycountyequivalent) %>%
+    select(cbsacode, cbsatitle, fipsstatecode, fipscountycode, statename) %>%
+    rename(STATE = fipsstatecode, COUNTY = fipscountycode) %>%
+    mutate(
+        COUNTY = paste0(STATE, COUNTY),
+        statename = str_replace(statename, " ", "_"))
 
-DF <- read_rds("data/prep_data/Wisconsin_750.Rds") %>%
-    filter(!(CENSUS == 0 & DP == 0)) %>%
-    filter(COUNTY %in% counties) %>%
-    mutate(TRACT = str_c(STATE, COUNTY, TRACT)) %>%
-    mutate(BLOCK = str_c(STATE, COUNTY, TRACT, BLKGRP, BLOCK)) %>%
-    pivot_longer(DP:CENSUS) %>%
-    select(TRACT, BLOCK, RACE, name, value) %>%
-    filter(RACE %in% c("Hispanic", "White", "Black", "Asian"))
-
-# multi level entropy calculations
-DF %>%
-    pivot_longer(DP:CENSUS) %>%
-    group_by(name, TRACT, BLKGRP, BLOCK, RACE) %>%
-    summarize(N = sum(value)) %>%
-    mutate(Total = sum(N), Qr = N / Total, Qrt = Qr * log(1/Qr)) %>%
-    mutate(Qrt = ifelse(is.na(Qrt), 0, Qrt)) %>%
-    summarize(E = sum(Qrt) / log(8)) %>%
-    group_by(name) %>%
-    summarize(meanE = mean(E))
-
-DF %>%
-    pivot_longer(DP:CENSUS) %>%
-    group_by(name, TRACT, RACE) %>%
-    summarize(N = sum(value)) %>%
-    mutate(Total = sum(N), Qr = N / Total, Qrt = Qr * log(1/Qr)) %>%
-    mutate(Qrt = ifelse(is.na(Qrt), 0, Qrt)) %>%
-    summarize(E = sum(Qrt) / log(8)) %>%
-    group_by(name) %>%
-    summarize(meanE = mean(E))
-
-DF %>%
-    pivot_longer(DP:CENSUS) %>%
-    group_by(name, RACE) %>%
-    summarize(N = sum(value)) %>%
-    mutate(Total = sum(N), Qr = N / Total) %>%
-    summarize(E = sum(Qr * log(1/Qr)) / log(8))
-
-# calcultite H index at top level using blocks as sub level and
-
-calcH <- function(DF){
-
+calcH <- function(DF, group = FALSE){
+    
     blockEDF <- DF %>%
         group_by(name, TRACT, BLOCK, RACE) %>%
         summarize(N = sum(value)) %>%
@@ -90,16 +58,45 @@ calcH <- function(DF){
             tractH = sum(numer), tractE = first(tractE), tractPop = sum(Pop)) %>%
         mutate(tractH = tractH/tractE)
     
-    tractHDF %>%
+    outDF <- tractHDF %>%
         left_join(indexHDF, by = "name") %>%
         mutate(tractH = ifelse(is.na(tractH), 1, tractH)) %>%
         group_by(name) %>%
         summarize(Hw = sum((tractE * tractH * tractPop) / (totalE * totalPop))) %>%
         left_join(indexHDF, by = "name") %>%
-        mutate(Hb = H-Hw, Pw = Hw/H)
+        mutate(Hb = H-Hw, Pb = 1-(Hw/H))
+    
+    if(group){
+        
+        wnwH <- DF %>%
+            mutate(RACE = ifelse(RACE == "White", "White", "Non-White")) %>%
+            calcH(group = FALSE) %>%
+            select(name, wnwH = H, wnwTotalE = totalE)
+        
+        nwH <- DF %>%
+            filter(RACE != "White") %>%
+            calcH(group = FALSE) %>%
+            select(name, nwH = H, nwTotalE = totalE)
+        
+        gDF <- DF %>%
+            mutate(RACE2 = RACE != "White") %>%
+            group_by(name) %>%
+            summarize(nwQ = sum(RACE2 * value) / sum(value)) %>%
+            left_join(wnwH, by = "name") %>%
+            left_join(nwH, by = "name")
+        
+        outDF <- outDF %>%
+            left_join(gDF, by = "name") %>%
+            mutate(Hbg = wnwTotalE / totalE * wnwH, Pbg = Hbg / H) %>%
+            mutate(Hwg = nwTotalE / totalE * nwH * nwQ) %>%
+            select(-nwQ, -wnwH, -wnwTotalE, -nwH, -nwTotalE, -Hwg)
+    }
+    
+    outDF %>%
+        select(-totalPop)
 }
 
-calcH(DF)
+calcH(DF, group = TRUE)
 
 tibble(
     RACE = c("B", "W", "B", "W", "B", "W", "B", "W"),
@@ -133,11 +130,16 @@ tibble(
     mutate(name="test") %>%
     calcH()
 
+# DF <- read_rds("data/prep_data/Wisconsin_750.Rds") %>%
+#     filter(!(CENSUS == 0 & DP == 0)) %>%
+#     filter(COUNTY %in% counties) %>%
+#     mutate(TRACT = str_c(STATE, COUNTY, TRACT)) %>%
+#     mutate(BLOCK = str_c(STATE, COUNTY, TRACT, BLKGRP, BLOCK)) %>%
+#     pivot_longer(DP:CENSUS) %>%
+#     select(TRACT, BLOCK, RACE, name, value) %>%
+#     filter(RACE %in% c("Hispanic", "White", "Black", "Asian"))
 
-tibble(
-    RACE = c("B", "W", "B", "W", "B", "W", "B", "W"),
-    value = c(15, 5, 15, 5, 5, 15, 5, 15),
-    TRACT = c("1", "1", "1", "1", "2", "2", "2", "2"),
-    BLOCK = c("1", "1", "2", "2", "3", "3", "4", "4")) %>%
-    mutate(name="test") %>%
-    calcH()
+# calcultite H index at top level using blocks as sub level and
+
+
+
