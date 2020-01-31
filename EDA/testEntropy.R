@@ -154,3 +154,39 @@ if(!file.exists("results/decompositionH.csv")){
     
     write_csv(allDF, "results/decompositionH.csv")
 }
+
+allDF <- read_csv("results/decompositionH.csv")
+
+allDF %>%
+    select(name, H, CBSA) %>%
+    pivot_wider(CBSA, names_from = name, values_from = H) %>%
+    ggplot(aes(x = CENSUS, y= DP)) +
+    geom_point() +
+    theme_classic() +
+    geom_abline() +
+    ggtitle("Difference in Thiels H Index of Metropolitan Areas")
+
+allDF %>%
+    select(name, Pb, CBSA) %>%
+    pivot_wider(CBSA, names_from = name, values_from = Pb) %>%
+    ggplot(aes(x = CENSUS, y= DP)) +
+    geom_point() +
+    theme_classic() +
+    geom_abline() +
+    ggtitle(
+        paste(
+            "Difference in Thiels H Attributable to Tract",
+            "Differences of Metropolitan Areas", sep = "\n"))
+
+allDF %>%
+    select(name, Pbg, CBSA) %>%
+    pivot_wider(CBSA, names_from = name, values_from = Pbg) %>%
+    ggplot(aes(x = CENSUS, y= DP)) +
+    geom_point() +
+    theme_classic() +
+    geom_abline() +
+    geom_smooth() +
+    ggtitle(
+        paste(
+            "Difference in Thiels H Attributable to White-Non White",
+            "Differences of Metropolitan Areas", sep = "\n"))

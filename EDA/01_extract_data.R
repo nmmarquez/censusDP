@@ -16,8 +16,8 @@ varNames <- c(
     P0020002 = "Hispanic",
     P0020005 = "White",
     P0020006 = "Black",
-    P0020007 = "Asian",
-    P0020008 = "AI",
+    P0020007 = "AI",
+    P0020008 = "Asian",
     P0020009 = "PI",
     P0020011 = "Two or more Races",
     P0020010 = "Other"
