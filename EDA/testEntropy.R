@@ -8,8 +8,6 @@ library(leaflet)
 library(leafgl)
 library(colorRamps)
 library(spdep)
-library(INLA)
-inla.setOption(pardiso.license = "~/pardiso.lic")
 
 msaCountyDF <- read_csv(
     "https://data.nber.org/cbsa-csa-fips-county-crosswalk/cbsa2fipsxw.csv") %>%
@@ -19,7 +17,8 @@ msaCountyDF <- read_csv(
     rename(STATE = fipsstatecode, COUNTY = fipscountycode) %>%
     mutate(
         COUNTY = paste0(STATE, COUNTY),
-        statename = str_replace(statename, " ", "_"))
+        statename = str_replace_all(statename, " ", "_")) %>%
+    filter(statename != "Puerto_Rico")
 
 calcH <- function(DF, group = FALSE){
     
@@ -96,8 +95,7 @@ calcH <- function(DF, group = FALSE){
         select(-totalPop)
 }
 
-calcH(DF, group = TRUE)
-
+### TESTING
 tibble(
     RACE = c("B", "W", "B", "W", "B", "W", "B", "W"),
     value = c(10, 10, 10, 10, 10, 10, 10, 10),
@@ -130,16 +128,29 @@ tibble(
     mutate(name="test") %>%
     calcH()
 
-# DF <- read_rds("data/prep_data/Wisconsin_750.Rds") %>%
-#     filter(!(CENSUS == 0 & DP == 0)) %>%
-#     filter(COUNTY %in% counties) %>%
-#     mutate(TRACT = str_c(STATE, COUNTY, TRACT)) %>%
-#     mutate(BLOCK = str_c(STATE, COUNTY, TRACT, BLKGRP, BLOCK)) %>%
-#     pivot_longer(DP:CENSUS) %>%
-#     select(TRACT, BLOCK, RACE, name, value) %>%
-#     filter(RACE %in% c("Hispanic", "White", "Black", "Asian"))
-
 # calcultite H index at top level using blocks as sub level and
 
-
-
+if(!file.exists("results/decompositionH.csv")){
+    allDF <- bind_rows(lapply(unique(msaCountyDF$cbsatitle), function(msa){
+       
+        cat(paste0(msa, "\n"))
+        
+        locDF <- msaCountyDF %>% filter(cbsatitle == msa)
+        
+        DF <- bind_rows(lapply(
+            str_c("data/prep_data/", unique(locDF$statename),"_750.Rds"), read_rds)) %>%
+            filter(!(CENSUS == 0 & DP == 0)) %>%
+            mutate(COUNTY = str_c(STATE, COUNTY)) %>%
+            filter(COUNTY %in% locDF$COUNTY) %>%
+            mutate(TRACT = str_c(STATE, COUNTY, TRACT)) %>%
+            mutate(BLOCK = str_c(STATE, COUNTY, TRACT, BLKGRP, BLOCK)) %>%
+            pivot_longer(DP:CENSUS) %>%
+            select(TRACT, BLOCK, RACE, name, value) %>%
+            filter(RACE %in% c("Hispanic", "White", "Black", "Asian"))
+        
+        calcH(DF, group = T) %>%
+            mutate(CBSA = msa)
+    }))
+    
+    write_csv(allDF, "results/decompositionH.csv")
+}

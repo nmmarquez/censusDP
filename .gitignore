@@ -6,6 +6,7 @@
 *.Rds
 *.rds
 *.pdf
+*.csv
 presentations/theoryMigrationClass/presentation_files/*
 presentations/theoryMigrationClass/libs/*
 presentations/maxPlanckDisertation/presentation_files/*
