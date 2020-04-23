@@ -1,0 +1,35 @@
+---
+title: "Review of Analysis Thus Far"
+author: "Lee Fiorio & Neal Marquez"
+date: "2/14/2020"
+output: html_document
+---
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(plotly)
+sp <- read_rds("../results/scalar_plots.Rds")
+pp <- read_rds("../results/geo_plots.Rds")
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+ggplotly(sp$h_scatter)
+ggplotly(sp$tractp_scatter)
+ggplotly(sp$groupp_scatter)
+ggplotly(sp$groupp_density)
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+ggplotly(pp$center_scatter)
+ggplotly(pp$place_scatter)
+ggplotly(pp$place_alone_scatter)
+ggplotly(pp$tract_scatter)
+ggplotly(pp$tract_alone_scatter)
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+pp$central_density
+pp$place_density
+pp$tract_density
+pp$seg_explained
+```

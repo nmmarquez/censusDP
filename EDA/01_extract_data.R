@@ -6,6 +6,8 @@
 # https://www2.census.gov/programs-surveys/decennial/2020/program-management/data-product-planning/2010-demonstration-data-products/
 rm(list=ls())
 library(tidyverse)
+library(tidycensus)
+library(ipumsr)
 
 # need to make names by hand
 # come from the census on page
@@ -138,4 +140,90 @@ for(LOC in LOCS){
             pivot_wider(names_from = SOURCE, values_from = value) %>%
             saveRDS(paste0("./data/prep_data/", LOC, "_", sl, ".Rds"))
     }
+}
+
+# https://www2.census.gov/programs-surveys/decennial/rdo/technical-documentation/CD116_TechnicalDocumentation.pdf
+# page 51 or 83 firefox pdf reader is weird
+# P01200XX
+# additionally these guys make getting block data hella easy
+# https://ciser.cornell.edu/data/data-archive/census-2010-dhc-download-center/
+
+ageVars <- bind_rows(
+    tibble(
+        base = 3:25,
+        id = sprintf("P01200%02d", 3:25),
+        sex = "male") %>%
+        mutate(age_group = case_when(
+            base <= 6 ~ "Under 18",
+            base > 6 & base <= 19 ~ "18-65",
+            base > 19 ~ "65+"
+        )),
+    tibble(
+        base = 27:49,
+        id = sprintf("P01200%02d", 27:49),
+        sex = "female") %>%
+        mutate(age_group = case_when(
+            base <= 30 ~ "Under 18",
+            base > 30 & base <= 43 ~ "18-65" ,
+            base > 43 ~ "65+"
+)))
+
+testDF <- get_decennial("block group", "P005003", year = 2010, state = "AK")
+
+# unzip the files
+# sometimes this is unreliable with large files so consider doing this in bash
+"data/2010-dp-housing" %>%
+    list.files(pattern = ".ZIP", full.names = TRUE) %>%
+    sapply(unzip, exdir = "data/2010-dp-housing")
+
+trueDF <- read_nhgis("data/2010-housing/nhgis0035_ds172_2010_block.csv") %>%
+    set_ipums_var_attributes(
+        read_ipums_codebook(
+            "data/nhgis0035_csv.zip",
+            "nhgis0035_csv/nhgis0035_ds172_2010_block_codebook.txt")) %>%
+    mutate(`Under 18` = 
+               H76003 + H76004 + H76005 + H76006 + 
+               H76027 + H76028 + H76029 + H76030) %>%
+    mutate(`18-65` = 
+               H76007 + H76008 + H76009 + H76010 + H76011 + H76012 + H76013 +
+               H76014 + H76015 + H76016 + H76017 + H76018 + H76019 +
+               H76031 + H76032 + H76033 + H76034 + H76035 + H76036 + H76037 +
+               H76038 + H76039 + H76040 + H76041 + H76042 + H76043) %>%
+    mutate(`65+` = 
+               H76020 + H76021 + H76022 + H76023 + H76024 + H76025 + 
+               H76044 + H76045 + H76046 + H76047 + H76048 + H76049) %>%
+    select(STATEA, COUNTYA, TRACTA, BLKGRPA, `Under 18`, `18-65`, `65+`) %>%
+    group_by(STATEA, COUNTYA, TRACTA, BLKGRPA) %>%
+    summarize(
+        `Under 18` = sum(`Under 18`), 
+        `18-65` = sum(`18-65`), 
+        `65+` = sum(`65+`)) %>%
+    ungroup() %>%
+    rename(STATE = STATEA, COUNTY = COUNTYA, TRACT = TRACTA, BLKGRP = BLKGRPA)
+
+HLOCS <- c(state.abb, "DC")
+
+for(loc in HLOCS){
+    cat(paste0(loc, "\n"))
+    dpDF <- read_csv(
+        paste0("data/2010-dp-housing/", loc, "2010DHC.CSV"),
+        col_names = TRUE,
+        col_types = paste0(c(rep("c", 101), rep("i", 2585)), collapse = "")) %>%
+        filter(SUMLEV == "150") %>%
+        select(STATE, COUNTY, TRACT, BLKGRP, !!!ageVars$id)
+
+    # sometimes this is numeric sometimes it aint weird
+    jointDF <- dpDF %>%
+        pivot_longer(P0120003:P0120049, names_to = "id") %>%
+        left_join(ageVars, by = "id") %>%
+        group_by(STATE, COUNTY, TRACT, BLKGRP, age_group) %>%
+        summarize(DP = sum(value)) %>%
+        ungroup() %>%
+        left_join(trueDF %>%
+            mutate(BLKGRP = as.character(BLKGRP)) %>%
+            filter(STATE == dpDF$STATE[1]) %>%
+            pivot_longer(
+                `Under 18`:`65+`, names_to = "age_group", values_to = "CENSUS"))
+    
+    write_csv(jointDF, paste0("data/prep_data_age/", loc, ".csv"))
 }
