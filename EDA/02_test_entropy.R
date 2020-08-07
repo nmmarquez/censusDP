@@ -39,8 +39,8 @@ if(!file.exists("results/decompositionH.csv")){
             filter(!(CENSUS == 0 & DP == 0)) %>%
             mutate(COUNTY = str_c(STATE, COUNTY)) %>%
             filter(COUNTY %in% locDF$COUNTY) %>%
-            mutate(TRACT = str_c(STATE, COUNTY, TRACT)) %>%
-            mutate(BLOCK = str_c(STATE, COUNTY, TRACT, BLKGRP, BLOCK)) %>%
+            mutate(TRACT = str_c(COUNTY, TRACT)) %>%
+            mutate(BLOCK = str_c(TRACT, BLKGRP, BLOCK)) %>%
             pivot_longer(DP:CENSUS) %>%
             select(TRACT, BLOCK, RACE, name, value) %>%
             filter(RACE %in% c("Hispanic", "White", "Black", "Asian"))
@@ -64,8 +64,8 @@ if(!file.exists("results/BGdecompositionH.csv")){
             filter(!(CENSUS == 0 & DP == 0)) %>%
             mutate(COUNTY = str_c(STATE, COUNTY)) %>%
             filter(COUNTY %in% locDF$COUNTY) %>%
-            mutate(TRACT = str_c(STATE, COUNTY, TRACT)) %>%
-            mutate(BLOCKGRP = str_c(STATE, COUNTY, TRACT, BLKGRP)) %>%
+            mutate(TRACT = str_c(COUNTY, TRACT)) %>%
+            mutate(BLOCKGRP = str_c(TRACT, BLKGRP)) %>%
             pivot_longer(DP:CENSUS) %>%
             select(TRACT, BLOCKGRP, RACE, name, value) %>%
             filter(RACE %in% c("Hispanic", "White", "Black", "Asian")) %>%
